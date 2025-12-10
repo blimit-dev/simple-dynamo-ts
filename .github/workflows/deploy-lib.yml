@@ -22,13 +22,13 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: "24.4.1"
+          node-version: ${{ vars.NODE_VERSION }}
           registry-url: "https://registry.npmjs.org/"
           cache: "pnpm"
 
       - name: UPDATE APPLICATION VERSION
         run: |
-          git config user.name "BLIMIT ADMIN"
+          git config user.name ${{ vars.ADMIN_NAME }}
           git config user.email ${{ secrets.ADMIN_EMAIL }}
           pnpm version patch
           git add package.json
@@ -42,5 +42,3 @@ jobs:
 
       - name: Publish to NPM
         run: pnpm publish --no-git-checks --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_ACCOUNT_TOKEN }}
