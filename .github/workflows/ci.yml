@@ -4,14 +4,54 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      node-version:
+        description: node version to use
+        required: false
+        default: "24.4.1"
+        type: string
+      admin-name:
+        description: Admin name that is used to update lib version
+        required: false
+        default: "BLIMIT ADMIN"
+        type: string
 
 permissions:
   contents: write
+  id-token: write  # Required for OIDC
 
 jobs:
-  deploy-lib:
-    uses: blimit-dev/infra-pipelines/.github/workflows/deploy-opensource-lib.yml@main
-    secrets: inherit
-    with:
-      node-version: "24.4.1"
-      branch: ${{ github.ref_name }}
+  deploy-gpr:
+    runs-on: ubuntu-slim
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup PNPM
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ inputs.node-version }}
+          registry-url: "https://registry.npmjs.org/"
+          cache: "pnpm"
+
+      - name: UPDATE APPLICATION VERSION
+        run: |
+          git config user.name ${{ inputs.admin-name }}
+          git config user.email ${{ secrets.ADMIN_EMAIL }}
+          pnpm version patch
+          git add package.json
+          git push --follow-tags
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build library
+        run: pnpm run build
+
+      - name: Publish to NPM
+        run: pnpm publish --no-git-checks --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_ACCOUNT_TOKEN }}
