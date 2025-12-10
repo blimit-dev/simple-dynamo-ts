@@ -6,29 +6,19 @@ on:
   workflow_dispatch:
   
 permissions:
-  contents: write
+  contents: read
   id-token: write  # Required for OIDC
 
 jobs:
-  deploy-npm-lib:
+  publish:
     runs-on: ubuntu-slim
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
+      - uses: actions/setup-node@v4
         with:
-          node-version: "24"
-          registry-url: "https://registry.npmjs.org/"
-
-      - name: UPDATE APPLICATION VERSION
-        run: |
-          git config user.name "BLIMIT ADMIN"
-          git config user.email ${{ secrets.ADMIN_EMAIL }}
-          npm version patch
-          git add package.json
-          git push --follow-tags
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
 
       # Ensure npm 11.5.1 or later is installed
       - name: Update npm
