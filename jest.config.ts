@@ -1,0 +1,45 @@
+module.exports = {
+  moduleFileExtensions: ["js", "json", "ts"],
+  rootDir: ".",
+  testRegex: ".*\\.spec\\.ts$",
+  transform: {
+    "^.+\\.(t|j)s$": "ts-jest",
+  },
+  collectCoverageFrom: ["<rootDir>/src/**/*.{ts,js}"],
+  coverageDirectory: "coverage",
+  testEnvironment: "node",
+  moduleNameMapper: {
+    "^src/(.*)$": "<rootDir>/src/$1",
+  },
+  preset: "ts-jest/presets/js-with-ts",
+  setupFilesAfterEnv: ["./jest.setup.ts"],
+  coverageReporters: ["json", "lcov", "text", "clover"],
+  coveragePathIgnorePatterns: [
+    "/node_modules/",
+    "/dist/",
+    "/test/",
+    "/coverage/",
+    "jest.config.ts",
+    "jest.setup.ts",
+    "/src/config/",
+    "/src/migrations/",
+    "/src/.*/dto/",
+    "/src/main.ts$",
+    "/src/users/users.service.ts$",
+    "/src/users/auth/decorators/",
+    "/src/users/auth/auth.service.ts$",
+    "/src/users/users.controller.ts$",
+    "/src/users/auth/auth.controller.ts$",
+    "/src/users/auth/guards/",
+    "/src/users/entities/",
+  ],
+
+  coverageThreshold: {
+    global: {
+      branches: 85,
+      functions: 85,
+      lines: 85,
+      statements: 85,
+    },
+  },
+};

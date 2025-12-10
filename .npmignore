@@ -1,0 +1,43 @@
+# Source files
+src/
+*.ts
+!*.d.ts
+
+# Example files
+**/*example*
+**/*.example.*
+
+# Test files
+test/
+**/*.spec.ts
+**/*.test.ts
+
+# Development files
+.git/
+.gitignore
+.prettierrc
+.prettierignore
+eslint.config.mjs
+jest.config.ts
+jest.setup.ts
+tsconfig.json
+tsconfig.build.json
+commitlint.config.cjs
+
+# Docker
+docker-compose/
+docker-compose.yml
+
+# Source maps are fine to include
+
+# Documentation (README.md and LICENSE will be included automatically)
+
+# Dependencies
+node_modules/
+
+# Misc
+.DS_Store
+*.log
+.env
+.env.local
+

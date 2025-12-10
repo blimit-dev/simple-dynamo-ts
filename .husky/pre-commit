@@ -1,0 +1,8 @@
+#!/bin/sh
+
+branch="$(git rev-parse --abbrev-ref HEAD)"
+
+if [ "$branch" = "master" ] || [ "$branch" = "main" ] || [ "$branch" = "develop" ]; then
+  echo "You can't commit directly to $branch branch. Please use a pull request."
+  exit 1
+fi
