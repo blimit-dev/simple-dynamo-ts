@@ -2,14 +2,36 @@
   "name": "simple-dynamo-ts",
   "version": "1.0.3",
   "description": "A simple TypeScript library for working with DynamoDB using decorators and a repository pattern",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "keywords": [
+    "dynamodb",
+    "aws",
+    "typescript",
+    "repository",
+    "decorators",
+    "orm"
+  ],
+  "homepage": "https://github.com/blimit-dev/simple-dynamo-ts#readme",
+  "bugs": {
+    "url": "https://github.com/blimit-dev/simple-dynamo-ts/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/blimit-dev/simple-dynamo-ts.git"
+  },
+  "license": "MIT",
+  "author": "Blimit",
+  "type": "commonjs",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "directories": {
+    "test": "test"
   },
   "files": [
     "dist"
@@ -23,22 +45,6 @@
     "test:cov": "jest --coverage",
     "prepare": "husky"
   },
-  "husky": {
-    "hooks": {
-      "pre-commit": "sh hooks/pre-commit",
-      "pre-push": "sh hooks/pre-push"
-    }
-  },
-  "keywords": [
-    "dynamodb",
-    "aws",
-    "typescript",
-    "repository",
-    "decorators",
-    "orm"
-  ],
-  "author": "Blimit",
-  "license": "MIT",
   "dependencies": {
     "@aws-sdk/lib-dynamodb": "^3.940.0",
     "reflect-metadata": "^0.2.2"
@@ -64,5 +70,10 @@
   "peerDependencies": {
     "@aws-sdk/lib-dynamodb": "^3.0.0"
   },
-  "packageManager": "pnpm@10.19.0"
+  "husky": {
+    "hooks": {
+      "pre-commit": "sh hooks/pre-commit",
+      "pre-push": "sh hooks/pre-push"
+    }
+  }
 }
