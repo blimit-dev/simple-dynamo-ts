@@ -2,9 +2,7 @@ name: OpenSource Library Pipeline
 
 on:
   push:
-    branches: [main, develop]
-  pull_request:
-    branches: [main, develop]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -13,6 +11,7 @@ permissions:
 jobs:
   deploy-lib:
     uses: blimit-dev/infra-pipelines/.github/workflows/deploy-opensource-lib.yml@main
+    secrets: inherit
     with:
       node-version: "24.4.1"
       branch: ${{ github.ref_name }}
