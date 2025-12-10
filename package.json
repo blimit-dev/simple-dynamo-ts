@@ -1,6 +1,6 @@
 {
   "name": "simple-dynamo-ts",
-  "version": "1.0.3",
+  "version": "1.0.6",
   "description": "A simple TypeScript library for working with DynamoDB using decorators and a repository pattern",
   "keywords": [
     "dynamodb",
@@ -25,7 +25,7 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
+      "require": "./dist/index.js"
     }
   },
   "main": "./dist/index.js",
@@ -34,7 +34,7 @@
     "test": "test"
   },
   "files": [
-    "dist"
+    "/dist"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
