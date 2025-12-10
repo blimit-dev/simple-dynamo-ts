@@ -1,6 +1,6 @@
 {
   "name": "simple-dynamo-ts",
-  "version": "1.0.5",
+  "version": "1.0.2",
   "description": "A simple TypeScript library for working with DynamoDB using decorators and a repository pattern",
   "keywords": [
     "dynamodb",
