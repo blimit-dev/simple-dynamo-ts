@@ -27,7 +27,7 @@ jobs:
         run: |
           git config user.name "BLIMIT ADMIN"
           git config user.email ${{ secrets.ADMIN_EMAIL }}
-          pnpm version patch
+          npm version patch
           git add package.json
           git push --follow-tags
 
