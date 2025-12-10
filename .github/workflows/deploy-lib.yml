@@ -28,7 +28,7 @@ jobs:
 
       - name: UPDATE APPLICATION VERSION
         run: |
-          git config user.name $ADMIN_NAME
+          git config user.name "$ADMIN_NAME"
           git config user.email ${{ secrets.ADMIN_EMAIL }}
           pnpm version patch
           git add package.json
