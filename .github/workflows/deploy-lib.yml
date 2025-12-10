@@ -10,7 +10,7 @@ permissions:
   id-token: write  # Required for OIDC
 
 jobs:
-  deploy-gpr:
+  deploy-npm-lib:
     runs-on: ubuntu-slim
     steps:
       - name: Checkout code
