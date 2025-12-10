@@ -1,4 +1,4 @@
-name: Backend NestJS Pipeline
+name: OpenSource Library Pipeline
 
 on:
   push:
@@ -11,8 +11,8 @@ permissions:
   contents: write
 
 jobs:
-  call-test-lint-workflow:
-    uses: blimit-dev/infra-pipelines/.github/workflows/nestjs-pipeline.yml@main
+  deploy-lib:
+    uses: blimit-dev/infra-pipelines/.github/workflows/deploy-opensource-lib.yml@main
     with:
       node-version: "24.4.1"
       branch: ${{ github.ref_name }}
