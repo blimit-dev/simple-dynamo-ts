@@ -5,18 +5,25 @@ export { DynamoDBRepository } from "./simple-dynamodb-repository";
 export {
   DynamoTable,
   PartitionKey,
+  CompositePartitionKey,
   SortKey,
   IndexPartitionKey,
   IndexSortKey,
   getDynamoTableName,
   getPartitionKeyName,
+  getCompositePartitionKeyFields,
   getSortKeyName,
   getIndexPartitionKeyName,
   getIndexSortKeyName,
 } from "./decorators";
 
 // Types
-export type { QueryOptions, DynamoKey, DynamoKeyMap } from "./types";
+export type {
+  QueryOptions,
+  DynamoKey,
+  DynamoKeyMap,
+  CompositePartitionKeyGroup,
+} from "./types";
 
 // Exceptions
 export {

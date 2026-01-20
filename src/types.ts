@@ -16,3 +16,8 @@ export type DynamoKeyMap = Record<string, DynamoKey>;
 export type DynamoEntityTarget =
   | NewableFunction
   | { constructor: NewableFunction };
+
+export type CompositePartitionKeyGroup = {
+  name: string;
+  fields: string[];
+};

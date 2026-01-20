@@ -5,13 +5,9 @@ import {
   SortKey,
   IndexPartitionKey,
   IndexSortKey,
-  getDynamoTableName,
-  getPartitionKeyName,
-  getSortKeyName,
-  getIndexPartitionKeyName,
-  getIndexSortKeyName,
 } from "../src/decorators";
 import { DuplicateDecoratorError } from "../src/exceptions";
+import { getDynamoTableName, getPartitionKeyName, getSortKeyName, getIndexPartitionKeyName, getIndexSortKeyName } from "../src/helper-functions";
 
 describe("Decorators", () => {
   beforeEach(() => {
