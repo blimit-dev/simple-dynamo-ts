@@ -17,7 +17,7 @@ export type DynamoEntityTarget =
   | NewableFunction
   | { constructor: NewableFunction };
 
-export type CompositePartitionKeyGroup = {
+export type CompositeKeyGroup = {
   name: string;
   fields: string[];
 };

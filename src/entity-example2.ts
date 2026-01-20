@@ -1,4 +1,8 @@
-import { CompositePartitionKey, DynamoTable, IndexSortKey } from "./decorators";
+import {
+  CompositePartitionKey,
+  CompositeSortKey,
+  DynamoTable,
+} from "./decorators";
 
 @DynamoTable("User")
 export class UserEntity {
@@ -6,10 +10,11 @@ export class UserEntity {
   orgId!: string;
   @CompositePartitionKey("pk")
   id: string = "generate-id";
-  @IndexSortKey("EmailIndex")
+  @CompositeSortKey("sk")
+  role: string = "USER";
+  @CompositeSortKey("sk")
   email!: string;
   password!: string;
-  role: string = "USER";
   createdAt!: string;
   updatedAt!: string;
   deletedAt?: string | undefined;

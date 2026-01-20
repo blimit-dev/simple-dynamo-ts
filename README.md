@@ -164,6 +164,59 @@ Marks a property as the sort key (RANGE key). The field name is optional.
 id!: string;
 ```
 
+### `@CompositePartitionKey(pkName?)`
+
+Marks multiple properties as parts of a **single composite partition key**.  
+All properties sharing the same `pkName` are combined into one DynamoDB partition key using a `#` separator, in the order the decorators are applied.
+
+```typescript
+import { DynamoTable, CompositePartitionKey } from "simple-dynamo-ts";
+
+@DynamoTable("User")
+export class UserEntity {
+  @CompositePartitionKey("pk")
+  orgId!: string;
+
+  @CompositePartitionKey("pk")
+  id!: string;
+
+  // In DynamoDB, this will be stored as:
+  // pk = `${orgId}#${id}`
+}
+```
+
+> **Note**: You cannot mix `@PartitionKey` and `@CompositePartitionKey` in the same entity.
+
+### `@CompositeSortKey(skName?)`
+
+Marks multiple properties as parts of a **single composite sort key**.  
+All properties sharing the same `skName` are combined into one DynamoDB sort key using a `#` separator, in the order the decorators are applied.
+
+```typescript
+import { DynamoTable, CompositePartitionKey, CompositeSortKey } from "simple-dynamo-ts";
+
+@DynamoTable("User")
+export class UserEntity {
+  @CompositePartitionKey("pk")
+  orgId!: string;
+
+  @CompositePartitionKey("pk")
+  id!: string;
+
+  @CompositeSortKey("sk")
+  role: string = "USER";
+
+  @CompositeSortKey("sk")
+  email!: string;
+
+  // In DynamoDB, this will be stored as:
+  // pk = `${orgId}#${id}`
+  // sk = `${role}#${email}`
+}
+```
+
+> **Note**: You cannot mix `@SortKey` and `@CompositeSortKey` in the same entity.
+
 ### `@IndexPartitionKey(indexName, fieldName?)`
 
 Marks a property as a partition key for a DynamoDB Global Secondary Index (GSI).
@@ -252,6 +305,19 @@ const result = await repository.query({
   indexName: "EmailIndex",
 });
 
+// With composite keys, you still query by the logical values:
+// Example entity:
+// @CompositePartitionKey("pk") orgId
+// @CompositePartitionKey("pk") id
+// @CompositeSortKey("sk") role
+// @CompositeSortKey("sk") email
+//
+// Repository usage:
+const resultWithComposite = await repository.query({
+  pk: "ORG-123#user-456", // composite pk value
+  sk: "ADMIN#user@example.com", // composite sk value
+});
+
 // Query with limit and sort order
 const result = await repository.query({
   pk: "USER",
@@ -323,7 +389,7 @@ Thrown when duplicate decorators are applied (e.g., multiple `@PartitionKey` dec
 
 ## Complete Example
 
-Here's a complete example demonstrating entity definition and repository usage:
+Here's a complete example demonstrating entity definition and repository usage with **simple keys**:
 
 ```typescript
 // user.entity.ts
@@ -415,6 +481,64 @@ const allUsers = await usersRepository.findAll();
 
 // Soft delete
 await usersRepository.delete("user-456");
+```
+
+### Complete Example with Composite Keys
+
+The same pattern works when using composite partition and sort keys:
+
+```typescript
+// user-composite.entity.ts
+import {
+  DynamoTable,
+  CompositePartitionKey,
+  CompositeSortKey,
+} from "simple-dynamo-ts";
+
+@DynamoTable("User")
+export class UserCompositeEntity {
+  @CompositePartitionKey("pk")
+  orgId!: string;
+
+  @CompositePartitionKey("pk")
+  id: string = "generate-id";
+
+  @CompositeSortKey("sk")
+  role: string = "USER";
+
+  @CompositeSortKey("sk")
+  email!: string;
+
+  password!: string;
+  createdAt!: string;
+  updatedAt!: string;
+  deletedAt?: string;
+}
+
+// users-composite.repository.ts
+import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
+import { DynamoDBRepository, QueryOptions } from "simple-dynamo-ts";
+import { UserCompositeEntity } from "./user-composite.entity";
+
+export class UsersCompositeRepository extends DynamoDBRepository<UserCompositeEntity> {
+  constructor(protected readonly client: DynamoDBDocumentClient) {
+    super(client, UserCompositeEntity);
+  }
+
+  async findAllByOrg(orgId: string): Promise<UserCompositeEntity[]> {
+    const result = await this.query({
+      pk: `${orgId}#USER`, // assuming id = "USER"
+    });
+    return result.items;
+  }
+
+  async findByCompositeKeys(orgId: string, id: string, role: string, email: string) {
+    return this.getItem(
+      `${orgId}#${id}`,      // pk = orgId#id
+      `${role}#${email}`,   // sk = role#email
+    );
+  }
+}
 ```
 
 ## Type Definitions

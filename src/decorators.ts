@@ -1,10 +1,11 @@
 import "reflect-metadata";
 import { DuplicateDecoratorError } from "./exceptions";
-import { CompositePartitionKeyGroup } from "./types";
+import { CompositeKeyGroup } from "./types";
 import {
   validateNonEmptyString,
   validateDuplicateDecorator,
   getCompositePartitionKeyFields,
+  getCompositeSortKeyFields,
 } from "./helper-functions";
 
 export const DYNAMO_TABLE_NAME_KEY = "dynamo:table:name";
@@ -14,6 +15,7 @@ export const DYNAMO_INDEX_PARTITION_KEYS_KEY = "dynamo:index:partition:keys";
 export const DYNAMO_INDEX_SORT_KEYS_KEY = "dynamo:index:sort:keys";
 export const DYNAMO_COMPOSITE_PARTITION_KEY_KEY =
   "dynamo:composite:partition:key";
+export const DYNAMO_COMPOSITE_SORT_KEY_KEY = "dynamo:composite:sort:key";
 
 /**
  * Decorator that adds a DynamoDB table name to the annotated class.
@@ -102,9 +104,8 @@ export function PartitionKey(fieldName?: string): PropertyDecorator {
 /**
  * Decorator that marks a property as part of a composite partition key.
  * Multiple properties with the same pkName will be combined into a single partition key
- * using the order specified by the position parameter.
+ * using the order in which the decorators are applied.
  *
- * @param position - The position in the composite key (0-based, determines order)
  * @param pkName - Optional. The name of the composite partition key group. If not provided, defaults to "pk".
  * @returns A property decorator function
  *
@@ -148,7 +149,7 @@ export function CompositePartitionKey(
     const existingCompositeKeys = Reflect.getMetadata(
       DYNAMO_COMPOSITE_PARTITION_KEY_KEY,
       target,
-    ) as CompositePartitionKeyGroup | undefined;
+    ) as CompositeKeyGroup | undefined;
 
     if (!existingCompositeKeys) {
       Reflect.defineMetadata(
@@ -212,6 +213,16 @@ export function SortKey(fieldName?: string): PropertyDecorator {
     }
     const dynamoFieldName = fieldName ?? String(propertyKey);
 
+    // Check if composite sort keys already exist
+    const existingCompositeSortKeys = getCompositeSortKeyFields(target);
+
+    if (existingCompositeSortKeys && existingCompositeSortKeys.length > 0) {
+      throw new DuplicateDecoratorError(
+        `Cannot use @SortKey with @CompositeSortKey in class "${target.constructor?.name || "Unknown"}". ` +
+          `An entity can only have either a single @SortKey or multiple @CompositeSortKey decorators, not both.`,
+      );
+    }
+
     validateDuplicateDecorator(
       target,
       DYNAMO_SORT_KEY_KEY,
@@ -219,6 +230,87 @@ export function SortKey(fieldName?: string): PropertyDecorator {
       propertyKey,
     );
     Reflect.defineMetadata(DYNAMO_SORT_KEY_KEY, dynamoFieldName, target);
+  };
+}
+
+/**
+ * Decorator that marks a property as part of a composite sort key.
+ * Multiple properties with the same skName will be combined into a single sort key
+ * using a deterministic order based on decorator application.
+ *
+ * @param skName - Optional. The name of the composite sort key group. If not provided, defaults to "sk".
+ * @returns A property decorator function
+ *
+ * @example
+ * ```typescript
+ * @DynamoTable("User")
+ * export class UserEntity {
+ *   @CompositeSortKey("sk")
+ *   createdAt: string;
+ *
+ *   @CompositeSortKey("sk")
+ *   id: string;
+ *
+ *   // These will be combined into a single "sk" field in DynamoDB
+ *   // as: "createdAtValue#idValue"
+ * }
+ * ```
+ */
+export function CompositeSortKey(skName: string = "sk"): PropertyDecorator {
+  return function (target: object, propertyKey: string | symbol) {
+    if (skName) {
+      validateNonEmptyString(skName, "skName");
+    }
+    const fieldName = String(propertyKey);
+
+    // Check if a regular sort key already exists
+    const existingSortKey = Reflect.getMetadata(DYNAMO_SORT_KEY_KEY, target) as
+      | string
+      | undefined;
+
+    if (existingSortKey) {
+      throw new DuplicateDecoratorError(
+        `Cannot use @CompositeSortKey with @SortKey in class "${target.constructor?.name || "Unknown"}". ` +
+          `An entity can only have either a single @SortKey or multiple @CompositeSortKey decorators, not both.`,
+      );
+    }
+
+    const existingCompositeKeys = Reflect.getMetadata(
+      DYNAMO_COMPOSITE_SORT_KEY_KEY,
+      target,
+    ) as CompositeKeyGroup | undefined;
+
+    if (!existingCompositeKeys) {
+      Reflect.defineMetadata(
+        DYNAMO_COMPOSITE_SORT_KEY_KEY,
+        { name: skName, fields: [fieldName] },
+        target,
+      );
+      return;
+    }
+
+    if (existingCompositeKeys.name !== skName) {
+      throw new DuplicateDecoratorError(
+        `Cannot use multiple composite sort key groups in class "${target.constructor?.name || "Unknown"}". ` +
+          `Existing composite key group: "${existingCompositeKeys.name}", conflicting group: "${skName}". ` +
+          `All @CompositeSortKey decorators must use the same skName.`,
+      );
+    }
+    if (existingCompositeKeys.fields !== undefined) {
+      if (existingCompositeKeys.fields.includes(fieldName)) {
+        throw new DuplicateDecoratorError(
+          `Property "${fieldName}" is already part of composite sort key "${skName}" in class "${target.constructor?.name || "Unknown"}".`,
+        );
+      }
+    }
+
+    existingCompositeKeys.fields.push(fieldName);
+
+    Reflect.defineMetadata(
+      DYNAMO_COMPOSITE_SORT_KEY_KEY,
+      existingCompositeKeys,
+      target,
+    );
   };
 }
 

@@ -12,6 +12,8 @@ import {
   SortKey,
   IndexPartitionKey,
   IndexSortKey,
+  CompositePartitionKey,
+  CompositeSortKey,
 } from "../src/decorators";
 import {
   DecoratorMissingError,
@@ -784,6 +786,72 @@ describe("DynamoDBRepository", () => {
       expect(expressions.expressionAttributeValues).toEqual({
         ":pkValue": 123,
         ":skValue": 456,
+      });
+    });
+  });
+
+  describe("composite keys", () => {
+    @DynamoTable("CompositeTable")
+    class CompositeEntity {
+      @CompositePartitionKey("pk")
+      orgId!: string;
+
+      @CompositePartitionKey("pk")
+      userId!: string;
+
+      @CompositeSortKey("sk")
+      role!: string;
+
+      @CompositeSortKey("sk")
+      email!: string;
+    }
+
+    class CompositeRepository extends DynamoDBRepository<CompositeEntity> {
+      constructor(client: DynamoDBDocumentClient) {
+        super(client, CompositeEntity);
+      }
+    }
+
+    it("should compose composite keys on create", async () => {
+      const compositeRepo = new CompositeRepository(mockClient);
+      const item: CompositeEntity = {
+        orgId: "ORG-1",
+        userId: "USER-1",
+        role: "ADMIN",
+        email: "admin@example.com",
+      };
+
+      mockClient.send = jest.fn().mockResolvedValue({});
+
+      await compositeRepo.create(item);
+
+      const command = (mockClient.send as jest.Mock).mock.calls[0][0];
+      expect(command).toBeInstanceOf(PutCommand);
+      if (command && command.input) {
+        expect(command.input.Item).toEqual({
+          pk: "ORG-1#USER-1",
+          sk: "ADMIN#admin@example.com",
+        });
+      }
+    });
+
+    it("should expand composite keys when reading items", async () => {
+      const compositeRepo = new CompositeRepository(mockClient);
+
+      mockClient.send = jest.fn().mockResolvedValue({
+        Item: {
+          pk: "ORG-1#USER-1",
+          sk: "ADMIN#admin@example.com",
+        },
+      });
+
+      const result = await compositeRepo.getItem("ORG-1#USER-1", "ADMIN#admin@example.com");
+
+      expect(result).toEqual({
+        orgId: "ORG-1",
+        userId: "USER-1",
+        role: "ADMIN",
+        email: "admin@example.com",
       });
     });
   });

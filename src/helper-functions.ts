@@ -1,6 +1,6 @@
 import "reflect-metadata";
 import { DuplicateDecoratorError } from "./exceptions";
-import { CompositePartitionKeyGroup, DynamoEntityTarget } from "./types";
+import { CompositeKeyGroup, DynamoEntityTarget } from "./types";
 import {
   DYNAMO_TABLE_NAME_KEY,
   DYNAMO_PARTITION_KEY_KEY,
@@ -8,6 +8,7 @@ import {
   DYNAMO_SORT_KEY_KEY,
   DYNAMO_INDEX_PARTITION_KEYS_KEY,
   DYNAMO_INDEX_SORT_KEYS_KEY,
+  DYNAMO_COMPOSITE_SORT_KEY_KEY,
 } from "./decorators";
 
 /**
@@ -99,7 +100,7 @@ export function getPartitionKeyName(
   const compositePK = Reflect.getMetadata(
     DYNAMO_COMPOSITE_PARTITION_KEY_KEY,
     prototype,
-  ) as CompositePartitionKeyGroup | undefined;
+  ) as CompositeKeyGroup | undefined;
 
   return compositePK?.name;
 }
@@ -119,9 +120,18 @@ export function getPartitionKeyName(
  */
 export function getSortKeyName(target: DynamoEntityTarget): string | undefined {
   const prototype = getPrototype(target);
-  return Reflect.getMetadata(DYNAMO_SORT_KEY_KEY, prototype) as
+  const simpleSK = Reflect.getMetadata(DYNAMO_SORT_KEY_KEY, prototype) as
     | string
     | undefined;
+
+  if (simpleSK) return simpleSK;
+
+  const compositeSK = Reflect.getMetadata(
+    DYNAMO_COMPOSITE_SORT_KEY_KEY,
+    prototype,
+  ) as CompositeKeyGroup | undefined;
+
+  return compositeSK?.name;
 }
 
 /**
@@ -201,6 +211,29 @@ export function getCompositePartitionKeyFields(
   const compositeKey = Reflect.getMetadata(
     DYNAMO_COMPOSITE_PARTITION_KEY_KEY,
     prototype,
-  ) as CompositePartitionKeyGroup | undefined;
+  ) as CompositeKeyGroup | undefined;
+  return compositeKey?.fields;
+}
+
+/**
+ * Retrieves the composite sort key configuration for a specific composite key name.
+ *
+ * @param target - The class constructor or class instance
+ * @returns Array of composite key fields ordered by position
+ *
+ * @example
+ * ```typescript
+ * const compositeKeyFields = getCompositeSortKeyFields(UserEntity);
+ * // Returns: ["createdAt", "id"]
+ * ```
+ */
+export function getCompositeSortKeyFields(
+  target: DynamoEntityTarget,
+): string[] | undefined {
+  const prototype = getPrototype(target);
+  const compositeKey = Reflect.getMetadata(
+    DYNAMO_COMPOSITE_SORT_KEY_KEY,
+    prototype,
+  ) as CompositeKeyGroup | undefined;
   return compositeKey?.fields;
 }

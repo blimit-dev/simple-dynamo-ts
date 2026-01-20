@@ -6,20 +6,22 @@ import {
   QueryCommand,
   QueryCommandInput,
 } from "@aws-sdk/lib-dynamodb";
-import {
-  getDynamoTableName,
-  getPartitionKeyName,
-  getSortKeyName,
-  getIndexPartitionKeyName,
-  getIndexSortKeyName,
-  getCompositePartitionKeyFields,
-} from "./decorators";
+
 import { DynamoKey, DynamoKeyMap, QueryOptions } from "./types";
 import {
   DecoratorMissingError,
   InvalidParametersError,
   ItemNotFoundError,
 } from "./exceptions";
+import {
+  getDynamoTableName,
+  getIndexPartitionKeyName,
+  getPartitionKeyName,
+  getIndexSortKeyName,
+  getSortKeyName,
+  getCompositePartitionKeyFields,
+  getCompositeSortKeyFields,
+} from "./helper-functions";
 
 export abstract class DynamoDBRepository<T> {
   private readonly COMPOSITE_KEY_DELIMITER = "#";
@@ -65,14 +67,6 @@ export abstract class DynamoDBRepository<T> {
   }
 
   /**
-   * Checks if the entity uses a composite partition key.
-   * @returns True if composite partition key is configured, false otherwise
-   */
-  protected isCompositePartitionKey() {
-    return getCompositePartitionKeyFields(this.entityClass) !== undefined;
-  }
-
-  /**
    * Gets the sort key name for the entity, optionally from a specific index.
    * @param indexName - Optional index name to get sort key from
    * @returns Sort key name or undefined if no sort key is configured
@@ -88,16 +82,15 @@ export abstract class DynamoDBRepository<T> {
   /**
    * Builds a composite partition key from entity properties.
    * @param item - The entity item containing properties
-   * @param pkName - Optional. The name of the composite partition key group.
    * @returns The composite key string or undefined if no composite keys exist
    */
-  protected buildCompositeKey(item: T): string | undefined {
-    const compositeKeys = getCompositePartitionKeyFields(this.entityClass);
-    if (!compositeKeys || compositeKeys.length === 0) return undefined;
-
-    const itemRecord = item as Record<string, unknown>;
-    const keyValues: string[] = compositeKeys.map((key) =>
-      this.convertValueToString(itemRecord[key]),
+  protected buildCompositeKey(
+    item: Record<string, unknown>,
+    keys: string[],
+  ): string | undefined {
+    if (!keys || keys.length === 0) return undefined;
+    const keyValues: string[] = keys.map((key) =>
+      this.convertValueToString(item[key]),
     );
     return keyValues.join(this.COMPOSITE_KEY_DELIMITER);
   }
@@ -117,14 +110,34 @@ export abstract class DynamoDBRepository<T> {
    * @returns The transformed item ready for DynamoDB
    */
   protected transformItemForSave(item: T): Record<string, unknown> {
-    const itemRecord = { ...(item as Record<string, unknown>) };
-    const compositeKeys = getCompositePartitionKeyFields(this.entityClass);
+    let itemRecord = { ...(item as Record<string, unknown>) };
 
-    if (compositeKeys !== undefined) {
-      const pk = this.buildCompositeKey(item);
-      itemRecord[this.getPKName()] = pk;
-      compositeKeys.forEach((key) => delete itemRecord[key]);
-    }
+    itemRecord = this.addCompositeKeyToItemIfExists(
+      getCompositePartitionKeyFields(this.entityClass),
+      this.getPKName(),
+      itemRecord,
+    );
+
+    itemRecord = this.addCompositeKeyToItemIfExists(
+      getCompositeSortKeyFields(this.entityClass),
+      this.getSKName()!,
+      itemRecord,
+    );
+
+    return itemRecord;
+  }
+
+  private addCompositeKeyToItemIfExists(
+    keys: string[] | undefined,
+    keyName: string,
+    item: Record<string, unknown>,
+  ) {
+    if (keys === undefined || keys.length === 0) return item;
+
+    const itemRecord = { ...item };
+    const builtKey = this.buildCompositeKey(item, keys);
+    itemRecord[keyName] = builtKey;
+    keys.forEach((key) => delete itemRecord[key]);
 
     return itemRecord;
   }
@@ -264,18 +277,39 @@ export abstract class DynamoDBRepository<T> {
    * @returns The entity object with expanded composite keys
    */
   protected convertDynamoItemToEntity(item: Record<string, unknown>) {
-    const entity = { ...item };
-    const compositeKeys = getCompositePartitionKeyFields(this.entityClass);
+    let entity = { ...item };
 
-    if (compositeKeys !== undefined) {
-      const pkName = this.getPKName();
-      const pks = (entity[pkName] as string).split(
-        this.COMPOSITE_KEY_DELIMITER,
-      );
-      compositeKeys.forEach((key, index) => (entity[key] = pks[index]));
-      delete entity[pkName];
-    }
+    entity = this.splitCompositeKeyIntoFieldsIfExists(
+      getCompositePartitionKeyFields(this.entityClass),
+      this.getPKName(),
+      entity,
+    );
+
+    entity = this.splitCompositeKeyIntoFieldsIfExists(
+      getCompositeSortKeyFields(this.entityClass),
+      this.getSKName()!,
+      entity,
+    );
+
     return entity as T;
+  }
+
+  private splitCompositeKeyIntoFieldsIfExists(
+    keys: string[] | undefined,
+    keyName: string,
+    entity: Record<string, unknown>,
+  ) {
+    if (keys === undefined || keys.length === 0) return entity;
+
+    const newEntity = { ...entity };
+
+    const keysValues = (entity[keyName] as string).split(
+      this.COMPOSITE_KEY_DELIMITER,
+    );
+    keys.forEach((key, index) => (newEntity[key] = keysValues[index]));
+    delete newEntity[keyName];
+
+    return newEntity;
   }
 
   /**
