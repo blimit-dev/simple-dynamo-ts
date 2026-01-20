@@ -5,13 +5,19 @@ import {
   SortKey,
   IndexPartitionKey,
   IndexSortKey,
+  CompositePartitionKey,
+  CompositeSortKey,
+} from "../src/decorators";
+import { DuplicateDecoratorError } from "../src/exceptions";
+import {
   getDynamoTableName,
   getPartitionKeyName,
   getSortKeyName,
   getIndexPartitionKeyName,
   getIndexSortKeyName,
-} from "../src/decorators";
-import { DuplicateDecoratorError } from "../src/exceptions";
+  getCompositePartitionKeyFields,
+  getCompositeSortKeyFields,
+} from "../src/helper-functions";
 
 describe("Decorators", () => {
   beforeEach(() => {
@@ -187,6 +193,72 @@ describe("Decorators", () => {
 
           @SortKey("sk2")
           timestamp2: string;
+        }
+      }).toThrow(DuplicateDecoratorError);
+    });
+  });
+
+  describe("@CompositePartitionKey", () => {
+    it("should register composite partition key fields in order", () => {
+      @DynamoTable("TestTable")
+      class TestEntity {
+        @CompositePartitionKey("pk")
+        orgId!: string;
+
+        @CompositePartitionKey("pk")
+        id!: string;
+      }
+
+      const fields = getCompositePartitionKeyFields(TestEntity);
+      expect(fields).toEqual(["orgId", "id"]);
+      expect(getPartitionKeyName(TestEntity)).toBe("pk");
+    });
+
+    it("should throw DuplicateDecoratorError when used with @PartitionKey", () => {
+      expect(() => {
+        @DynamoTable("TestTable")
+        class TestEntity {
+          @PartitionKey("pk")
+          id!: string;
+
+          @CompositePartitionKey("pk")
+          orgId!: string;
+        }
+      }).toThrow(DuplicateDecoratorError);
+    });
+  });
+
+  describe("@CompositeSortKey", () => {
+    it("should register composite sort key fields in order", () => {
+      @DynamoTable("TestTable")
+      class TestEntity {
+        @PartitionKey("pk")
+        id!: string;
+
+        @CompositeSortKey("sk")
+        role!: string;
+
+        @CompositeSortKey("sk")
+        email!: string;
+      }
+
+      const fields = getCompositeSortKeyFields(TestEntity);
+      expect(fields).toEqual(["role", "email"]);
+      expect(getSortKeyName(TestEntity)).toBe("sk");
+    });
+
+    it("should throw DuplicateDecoratorError when used with @SortKey", () => {
+      expect(() => {
+        @DynamoTable("TestTable")
+        class TestEntity {
+          @PartitionKey("pk")
+          id!: string;
+
+          @SortKey("sk")
+          timestamp!: string;
+
+          @CompositeSortKey("sk")
+          role!: string;
         }
       }).toThrow(DuplicateDecoratorError);
     });

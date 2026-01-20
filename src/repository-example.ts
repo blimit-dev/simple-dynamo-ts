@@ -30,8 +30,6 @@ export class UsersRepository extends DynamoDBRepository<UserEntity> {
     };
     const response = await this.query(queryOptions);
 
-    //Its not possible to have more than one user with the same email since it is a key in the database,
-    //so only validating if count is different than 0
     if (response.count) return response.items[0];
 
     throw new Error("User with this email not found!");

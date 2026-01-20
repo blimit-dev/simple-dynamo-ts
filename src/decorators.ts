@@ -1,53 +1,21 @@
 import "reflect-metadata";
 import { DuplicateDecoratorError } from "./exceptions";
-import { DynamoEntityTarget } from "./types";
+import { CompositeKeyGroup } from "./types";
+import {
+  validateNonEmptyString,
+  validateDuplicateDecorator,
+  getCompositePartitionKeyFields,
+  getCompositeSortKeyFields,
+} from "./helper-functions";
 
 export const DYNAMO_TABLE_NAME_KEY = "dynamo:table:name";
 export const DYNAMO_PARTITION_KEY_KEY = "dynamo:partition:key";
 export const DYNAMO_SORT_KEY_KEY = "dynamo:sort:key";
 export const DYNAMO_INDEX_PARTITION_KEYS_KEY = "dynamo:index:partition:keys";
 export const DYNAMO_INDEX_SORT_KEYS_KEY = "dynamo:index:sort:keys";
-
-/**
- * Helper function to get the constructor from a class or instance.
- */
-function getConstructor(target: DynamoEntityTarget): NewableFunction {
-  return typeof target === "function" ? target : target.constructor;
-}
-
-/**
- * Helper function to get the prototype from a class or instance.
- */
-function getPrototype(target: DynamoEntityTarget): object {
-  return getConstructor(target).prototype as object;
-}
-
-/**
- * Helper function to verify the duplicate existence of a unique decorator
- */
-function validateDuplicateDecorator(
-  target: object,
-  key: string,
-  decoratorName: string,
-  conflict: string | symbol,
-) {
-  const existingKey = Reflect.getMetadata(key, target) as string | undefined;
-  if (existingKey !== undefined) {
-    throw new DuplicateDecoratorError(
-      `Multiple ${decoratorName} decorators found in class "${target.constructor?.name || "Unknown"}". ` +
-        `Existing decorator: "${existingKey}", conflicting property: "${String(conflict)}"`,
-    );
-  }
-}
-
-/**
- * Validates that a string is not empty.
- */
-function validateNonEmptyString(value: string, paramName: string): void {
-  if (value.trim() === "") {
-    throw new Error(`Invalid ${paramName}: cannot be an empty string.`);
-  }
-}
+export const DYNAMO_COMPOSITE_PARTITION_KEY_KEY =
+  "dynamo:composite:partition:key";
+export const DYNAMO_COMPOSITE_SORT_KEY_KEY = "dynamo:composite:sort:key";
 
 /**
  * Decorator that adds a DynamoDB table name to the annotated class.
@@ -113,6 +81,16 @@ export function PartitionKey(fieldName?: string): PropertyDecorator {
     }
     const dynamoFieldName = fieldName ?? String(propertyKey);
 
+    // Check if composite partition keys already exist
+    const existingCompositeKeys = getCompositePartitionKeyFields(target);
+
+    if (existingCompositeKeys && existingCompositeKeys.length > 0) {
+      throw new DuplicateDecoratorError(
+        `Cannot use @PartitionKey with @CompositePartitionKey in class "${target.constructor?.name || "Unknown"}". ` +
+          `An entity can only have either a single @PartitionKey or multiple @CompositePartitionKey decorators, not both.`,
+      );
+    }
+
     validateDuplicateDecorator(
       target,
       DYNAMO_PARTITION_KEY_KEY,
@@ -120,6 +98,90 @@ export function PartitionKey(fieldName?: string): PropertyDecorator {
       dynamoFieldName,
     );
     Reflect.defineMetadata(DYNAMO_PARTITION_KEY_KEY, dynamoFieldName, target);
+  };
+}
+
+/**
+ * Decorator that marks a property as part of a composite partition key.
+ * Multiple properties with the same pkName will be combined into a single partition key
+ * using the order in which the decorators are applied.
+ *
+ * @param pkName - Optional. The name of the composite partition key group. If not provided, defaults to "pk".
+ * @returns A property decorator function
+ *
+ * @example
+ * ```typescript
+ * @DynamoTable("User")
+ * export class UserEntity {
+ *   @CompositePartitionKey(0, "pk")
+ *   orgId: string;
+ *
+ *   @CompositePartitionKey(1, "pk")
+ *   userId: string;
+ *
+ *   // These will be combined into a single "pk" field in DynamoDB
+ *   // as: "orgIdValue#userIdValue"
+ * }
+ * ```
+ */
+export function CompositePartitionKey(
+  pkName: string = "pk",
+): PropertyDecorator {
+  return function (target: object, propertyKey: string | symbol) {
+    if (pkName) {
+      validateNonEmptyString(pkName, "pkName");
+    }
+    const fieldName = String(propertyKey);
+
+    // Check if a regular partition key already exists
+    const existingPartitionKey = Reflect.getMetadata(
+      DYNAMO_PARTITION_KEY_KEY,
+      target,
+    ) as string | undefined;
+
+    if (existingPartitionKey) {
+      throw new DuplicateDecoratorError(
+        `Cannot use @CompositePartitionKey with @PartitionKey in class "${target.constructor?.name || "Unknown"}". ` +
+          `An entity can only have either a single @PartitionKey or multiple @CompositePartitionKey decorators, not both.`,
+      );
+    }
+
+    const existingCompositeKeys = Reflect.getMetadata(
+      DYNAMO_COMPOSITE_PARTITION_KEY_KEY,
+      target,
+    ) as CompositeKeyGroup | undefined;
+
+    if (!existingCompositeKeys) {
+      Reflect.defineMetadata(
+        DYNAMO_COMPOSITE_PARTITION_KEY_KEY,
+        { name: pkName, fields: [fieldName] },
+        target,
+      );
+      return;
+    }
+
+    if (existingCompositeKeys.name !== pkName) {
+      throw new DuplicateDecoratorError(
+        `Cannot use multiple composite partition key groups in class "${target.constructor?.name || "Unknown"}". ` +
+          `Existing composite key group: "${existingCompositeKeys.name}", conflicting group: "${pkName}". ` +
+          `All @CompositePartitionKey decorators must use the same pkName.`,
+      );
+    }
+    if (existingCompositeKeys.fields !== undefined) {
+      if (existingCompositeKeys.fields.includes(fieldName)) {
+        throw new DuplicateDecoratorError(
+          `Property "${fieldName}" is already part of composite key "${pkName}" in class "${target.constructor?.name || "Unknown"}".`,
+        );
+      }
+    }
+
+    existingCompositeKeys.fields.push(fieldName);
+
+    Reflect.defineMetadata(
+      DYNAMO_COMPOSITE_PARTITION_KEY_KEY,
+      existingCompositeKeys,
+      target,
+    );
   };
 }
 
@@ -151,6 +213,16 @@ export function SortKey(fieldName?: string): PropertyDecorator {
     }
     const dynamoFieldName = fieldName ?? String(propertyKey);
 
+    // Check if composite sort keys already exist
+    const existingCompositeSortKeys = getCompositeSortKeyFields(target);
+
+    if (existingCompositeSortKeys && existingCompositeSortKeys.length > 0) {
+      throw new DuplicateDecoratorError(
+        `Cannot use @SortKey with @CompositeSortKey in class "${target.constructor?.name || "Unknown"}". ` +
+          `An entity can only have either a single @SortKey or multiple @CompositeSortKey decorators, not both.`,
+      );
+    }
+
     validateDuplicateDecorator(
       target,
       DYNAMO_SORT_KEY_KEY,
@@ -158,6 +230,87 @@ export function SortKey(fieldName?: string): PropertyDecorator {
       propertyKey,
     );
     Reflect.defineMetadata(DYNAMO_SORT_KEY_KEY, dynamoFieldName, target);
+  };
+}
+
+/**
+ * Decorator that marks a property as part of a composite sort key.
+ * Multiple properties with the same skName will be combined into a single sort key
+ * using a deterministic order based on decorator application.
+ *
+ * @param skName - Optional. The name of the composite sort key group. If not provided, defaults to "sk".
+ * @returns A property decorator function
+ *
+ * @example
+ * ```typescript
+ * @DynamoTable("User")
+ * export class UserEntity {
+ *   @CompositeSortKey("sk")
+ *   createdAt: string;
+ *
+ *   @CompositeSortKey("sk")
+ *   id: string;
+ *
+ *   // These will be combined into a single "sk" field in DynamoDB
+ *   // as: "createdAtValue#idValue"
+ * }
+ * ```
+ */
+export function CompositeSortKey(skName: string = "sk"): PropertyDecorator {
+  return function (target: object, propertyKey: string | symbol) {
+    if (skName) {
+      validateNonEmptyString(skName, "skName");
+    }
+    const fieldName = String(propertyKey);
+
+    // Check if a regular sort key already exists
+    const existingSortKey = Reflect.getMetadata(DYNAMO_SORT_KEY_KEY, target) as
+      | string
+      | undefined;
+
+    if (existingSortKey) {
+      throw new DuplicateDecoratorError(
+        `Cannot use @CompositeSortKey with @SortKey in class "${target.constructor?.name || "Unknown"}". ` +
+          `An entity can only have either a single @SortKey or multiple @CompositeSortKey decorators, not both.`,
+      );
+    }
+
+    const existingCompositeKeys = Reflect.getMetadata(
+      DYNAMO_COMPOSITE_SORT_KEY_KEY,
+      target,
+    ) as CompositeKeyGroup | undefined;
+
+    if (!existingCompositeKeys) {
+      Reflect.defineMetadata(
+        DYNAMO_COMPOSITE_SORT_KEY_KEY,
+        { name: skName, fields: [fieldName] },
+        target,
+      );
+      return;
+    }
+
+    if (existingCompositeKeys.name !== skName) {
+      throw new DuplicateDecoratorError(
+        `Cannot use multiple composite sort key groups in class "${target.constructor?.name || "Unknown"}". ` +
+          `Existing composite key group: "${existingCompositeKeys.name}", conflicting group: "${skName}". ` +
+          `All @CompositeSortKey decorators must use the same skName.`,
+      );
+    }
+    if (existingCompositeKeys.fields !== undefined) {
+      if (existingCompositeKeys.fields.includes(fieldName)) {
+        throw new DuplicateDecoratorError(
+          `Property "${fieldName}" is already part of composite sort key "${skName}" in class "${target.constructor?.name || "Unknown"}".`,
+        );
+      }
+    }
+
+    existingCompositeKeys.fields.push(fieldName);
+
+    Reflect.defineMetadata(
+      DYNAMO_COMPOSITE_SORT_KEY_KEY,
+      existingCompositeKeys,
+      target,
+    );
   };
 }
 
@@ -265,128 +418,6 @@ export function IndexSortKey(
     existingKeys[indexName] = dynamoFieldName;
     Reflect.defineMetadata(DYNAMO_INDEX_SORT_KEYS_KEY, existingKeys, target);
   };
-}
-
-/**
- * Retrieves the DynamoDB table name from a class that has been decorated with @DynamoTable.
- *
- * @param target - The class constructor or class instance
- * @returns The table name if found, undefined otherwise
- *
- * @example
- * ```typescript
- * const tableName = getDynamoTableName(UserEntity);
- * // or
- * const tableName = getDynamoTableName(new UserEntity());
- * ```
- */
-export function getDynamoTableName(
-  target: DynamoEntityTarget,
-): string | undefined {
-  const constructor = getConstructor(target);
-  return Reflect.getMetadata(DYNAMO_TABLE_NAME_KEY, constructor) as
-    | string
-    | undefined;
-}
-
-/**
- * Retrieves the partition key DynamoDB field name from a class that has a property decorated with @PartitionKey.
- *
- * @param target - The class constructor or class instance
- * @returns The partition key DynamoDB field name if found, undefined otherwise
- *
- * @example
- * ```typescript
- * const partitionKey = getPartitionKeyName(UserEntity);
- * // or
- * const partitionKey = getPartitionKeyName(new UserEntity());
- * ```
- */
-export function getPartitionKeyName(
-  target: DynamoEntityTarget,
-): string | undefined {
-  const prototype = getPrototype(target);
-  return Reflect.getMetadata(DYNAMO_PARTITION_KEY_KEY, prototype) as
-    | string
-    | undefined;
-}
-
-/**
- * Retrieves the sort key DynamoDB field name from a class that has a property decorated with @SortKey.
- *
- * @param target - The class constructor or class instance
- * @returns The sort key DynamoDB field name if found, undefined otherwise
- *
- * @example
- * ```typescript
- * const sortKey = getSortKeyName(UserEntity);
- * // or
- * const sortKey = getSortKeyName(new UserEntity());
- * ```
- */
-export function getSortKeyName(target: DynamoEntityTarget): string | undefined {
-  const prototype = getPrototype(target);
-  return Reflect.getMetadata(DYNAMO_SORT_KEY_KEY, prototype) as
-    | string
-    | undefined;
-}
-
-/**
- * Retrieves the partition key DynamoDB field name for a specific index from a class.
- *
- * @param target - The class constructor or class instance
- * @param indexName - The name of the DynamoDB index
- * @returns The partition key DynamoDB field name for the index if found, undefined otherwise
- *
- * @example
- * ```typescript
- * const partitionKey = getIndexPartitionKeyName(UserEntity, "EmailIndex");
- * // or
- * const partitionKey = getIndexPartitionKeyName(new UserEntity(), "EmailIndex");
- * ```
- */
-export function getIndexPartitionKeyName(
-  target: DynamoEntityTarget,
-  indexName: string,
-): string | undefined {
-  if (!indexName || indexName.trim() === "") {
-    throw new Error("indexName cannot be empty");
-  }
-  const prototype = getPrototype(target);
-  const indexKeys = Reflect.getMetadata(
-    DYNAMO_INDEX_PARTITION_KEYS_KEY,
-    prototype,
-  ) as Record<string, string> | undefined;
-  return indexKeys?.[indexName];
-}
-
-/**
- * Retrieves the sort key DynamoDB field name for a specific index from a class.
- *
- * @param target - The class constructor or class instance
- * @param indexName - The name of the DynamoDB index
- * @returns The sort key DynamoDB field name for the index if found, undefined otherwise
- *
- * @example
- * ```typescript
- * const sortKey = getIndexSortKeyName(UserEntity, "EmailIndex");
- * // or
- * const sortKey = getIndexSortKeyName(new UserEntity(), "EmailIndex");
- * ```
- */
-export function getIndexSortKeyName(
-  target: DynamoEntityTarget,
-  indexName: string,
-): string | undefined {
-  if (!indexName || indexName.trim() === "") {
-    throw new Error("indexName cannot be empty");
-  }
-  const prototype = getPrototype(target);
-  const indexKeys = Reflect.getMetadata(
-    DYNAMO_INDEX_SORT_KEYS_KEY,
-    prototype,
-  ) as Record<string, string> | undefined;
-  return indexKeys?.[indexName];
 }
 //TODO add uniqueness possibility
 //TODO add updatedAt, createdAt, deletedAt automatic fields

@@ -6,10 +6,7 @@ module.exports = {
     "^.+\\.(t|j)s$": [
       "ts-jest",
       {
-        tsconfig: {
-          moduleResolution: "node",
-          resolvePackageJsonExports: false,
-        },
+        tsconfig: "tsconfig.json",
       },
     ],
   },
